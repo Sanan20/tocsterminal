@@ -1,49 +1,44 @@
 pipeline {
     agent any
 
+    environment {
+        DOCKER_REGISTRY_CREDS = '64b64a69-5b87-4824-b1e1-e7013ddf2cb8'
+        EMAIL_NOTIFICATION = 'sp20-bcs-038@cuiatk.edu.pk'
+        DOCKER_BFLASK_IMAGE = 'sp20bcs038399/demoflaskapp' // 
+    }
+
     stages {
         stage('Build') {
             steps {
-                script {
-                    dockerImage = docker.build("sp20bcs038399/personal-portfolio:${env.BUILD_ID}")
-                }
-            }
-        }
-        stage('Push') {
-            steps {
-                script {
-                    docker.withRegistry('https://registry.hub.docker.com', 'docker-hub') {
-                        dockerImage.push()
-                    }
-                }
+                sh 'docker build -t my-flask-app .'
+                sh "docker tag my-flask-app ${DOCKER_BFLASK_IMAGE}"
             }
         }
 
         stage('Test') {
             steps {
-                sh 'ls -l index.html' // Simple check for index.html
+                sh 'docker run my-flask-app python -m pytest app/tests/'
             }
         }
 
         stage('Deploy') {
             steps {
                 script {
-                    // Deploy the new version
-                    sshPublisher(
-                        publishers: [
-                            sshPublisherDesc(
-                                configName: "SananTerminal", 
-                                transfers: [sshTransfer(
-                                    execCommand: """
-                                        docker pull sp20bcs038399/personal-portfolio:${env.BUILD_ID}
-                                        docker stop personal-portfolio-container || true
-                                        docker rm personal-portfolio-container || true
-                                        docker run -d --name personal-portfolio-container -p 80:80 sp20bcs038399/personal-portfolio:${env.BUILD_ID}
-                                    """
-                                )]
-                            )
-                        ]
-                    )
+                    withCredentials([usernamePassword(credentialsId: "${DOCKER_REGISTRY_CREDS}", passwordVariable: 'DOCKER_PASSWORD', usernameVariable: 'DOCKER_USERNAME')]) {
+                        sh "echo \$DOCKER_PASSWORD | docker login -u \$DOCKER_USERNAME --password-stdin docker.io"
+                        sh "docker push ${DOCKER_BFLASK_IMAGE}"
+
+                        sh "docker pull ${DOCKER_BFLASK_IMAGE}:latest"
+                        sh "docker stop my-flask-app || true"
+                        sh "docker rm my-flask-app || true"
+
+                        try {
+                            sh "docker run -d -p 80:5000 --name my-flask-app ${DOCKER_BFLASK_IMAGE}:latest"
+                        } catch (Exception e) {
+                            currentBuild.result = 'FAILURE'
+                            error("Deployment failed. Rolling back to the previous version.")
+                        }
+                    }
                 }
             }
         }
@@ -51,11 +46,13 @@ pipeline {
 
     post {
         failure {
-            mail(
-                to: 'sp20-bcs-038@cuiatk.edu.pk',
-                subject: "Failed Pipeline: ${env.JOB_NAME} [${env.BUILD_NUMBER}]",
-                body: "Something is wrong with the build ${env.BUILD_URL}"
-            )
+            emailext body: 'The deployment of Flask App failed. Please check the Jenkins console for details.',
+                     subject: 'Flask App Deployment Failed',
+                     to: "${EMAIL_NOTIFICATION}"
+        }
+
+        always {
+            sh 'docker logout'
         }
     }
 }
