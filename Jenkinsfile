@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     environment {
-        DOCKER_REGISTRY_CREDS = '64b64a69-5b87-4824-b1e1-e7013ddf2cb8'
+        DOCKER_REGISTRY_CREDS = 'dockerhub'
         EMAIL_NOTIFICATION = 'sp20-bcs-038@cuiatk.edu.pk'
         DOCKER_BFLASK_IMAGE = 'sp20bcs038399/demoflaskapp' // 
     }
