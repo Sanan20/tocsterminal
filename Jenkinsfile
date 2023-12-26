@@ -10,14 +10,14 @@ pipeline {
     stages {
         stage('Build') {
             steps {
-                sh 'docker build -t my-flask-app .'
+                sh 'docker build -t flask-web-app .'
                 sh "docker tag my-flask-app ${DOCKER_BFLASK_IMAGE}"
             }
         }
 
         stage('Test') {
             steps {
-                sh 'docker run my-flask-app python -m pytest app/tests/'
+                sh 'docker run flask-web-app python -m pytest app/tests/'
             }
         }
 
@@ -29,11 +29,11 @@ pipeline {
                         sh "docker push ${DOCKER_BFLASK_IMAGE}"
 
                         sh "docker pull ${DOCKER_BFLASK_IMAGE}:latest"
-                        sh "docker stop my-flask-app || true"
-                        sh "docker rm my-flask-app || true"
+                        sh "docker stop flask-web-app || true"
+                        sh "docker rm flask-web-app || true"
 
                         try {
-                            sh "docker run -d -p 80:5000 --name my-flask-app ${DOCKER_BFLASK_IMAGE}:latest"
+                            sh "docker run -d -p 80:5000 --name flask-web-app ${DOCKER_BFLASK_IMAGE}:latest"
                         } catch (Exception e) {
                             currentBuild.result = 'FAILURE'
                             error("Deployment failed. Rolling back to the previous version.")
